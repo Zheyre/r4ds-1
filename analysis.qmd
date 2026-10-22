@@ -1,6 +1,78 @@
 ---
-title: "Billboard Hot 1003"
+title: "Billboard Hot 100"
 author: "Zheyre Tolliver"
 format: html
+execute:
+  echo: false
 ---
 
+```{r}
+#| message: false
+library(tidyverse)
+```
+
+
+```{r}
+#| cache: true
+billboard <- read_csv("data/billboard.csv", show_col_types = FALSE)
+```
+
+```{r}
+songs <- billboard |>
+  pivot_longer(
+    starts_with("wk"),
+    names_to = "week",
+    values_to = "rank",
+    values_drop_na = TRUE
+  ) |>
+  mutate(week = parse_number(week)) |>
+  group_by(artist, track) |>
+  summarize(
+    first_rank = rank[week == 1],
+    best_rank = min(rank),
+    best_week = min(week[rank == min(rank)]),
+    weeks_on_chart = n(),
+    .groups = "drop"
+  )
+
+number_ones <- songs |> filter(best_rank == 1)
+
+bind_rows(
+  number_ones |> slice_min(best_week, n = 1, with_ties = FALSE) |> mutate(label = "Fastest to #1"),
+  number_ones |> slice_max(best_week, n = 1, with_ties = FALSE) |> mutate(label = "Slowest to #1"),
+  songs |> filter(best_rank <= 10) |> slice_max(weeks_on_chart, n = 1, with_ties = FALSE) |> mutate(label = "Longest top-10 run")
+) |>
+  select(label, artist, track, first_rank, best_rank, best_week, weeks_on_chart)
+```
+
+```{r}
+top10 <- billboard |>
+  pivot_longer(
+    starts_with("wk"),
+    names_to = "week",
+    values_to = "rank",
+    values_drop_na = TRUE
+  ) |>
+  mutate(week = parse_number(week)) |>
+  group_by(artist, track) |>
+  filter(min(rank) <= 10) |>
+  ungroup() |>
+  mutate(song = paste0(artist, ": ", track))
+
+highlight <- top10 |>
+  filter(song %in% c("Madonna: Music", "Lonestar: Amazed", "Creed: Higher"))
+
+ggplot() +
+  geom_line(data = top10, aes(x = week, y = rank, group = song),
+            color = "gray80") +
+  geom_line(data = highlight, aes(x = week, y = rank, color = song),
+            linewidth = 1.2) +
+  scale_y_reverse() +
+  labs(
+    title = "Three Different Paths Through the Top 10",
+    subtitle = "All top-10 songs in gray, three notable hits in color",
+    x = "Weeks on the Chart",
+    y = "Rank (1 = best)",
+    color = "Song"
+  )
+```
